@@ -1,0 +1,4 @@
+aiogram
+curl-cffi
+PyQt6
+yt-dlp

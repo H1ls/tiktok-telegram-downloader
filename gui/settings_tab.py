@@ -30,11 +30,8 @@ class SettingsTab(QtWidgets.QWidget):
         layout.addRow("TG token", self.token_edit)
 
         self.data_dir_edit = QtWidgets.QLineEdit(settings.data_dir)
-        self.btn_data_dir = QtWidgets.QPushButton("Browse")
-        data_row = QtWidgets.QHBoxLayout()
-        data_row.addWidget(self.data_dir_edit)
-        data_row.addWidget(self.btn_data_dir)
-        layout.addRow("Settings folder", data_row)
+        self.data_dir_edit.setReadOnly(True)
+        layout.addRow("Settings folder", self.data_dir_edit)
 
         self.download_dir_edit = QtWidgets.QLineEdit(settings.download_root)
         self.btn_download_dir = QtWidgets.QPushButton("Browse")
@@ -46,7 +43,6 @@ class SettingsTab(QtWidgets.QWidget):
         self.btn_save_settings = QtWidgets.QPushButton("Save settings")
         layout.addRow("", self.btn_save_settings)
 
-        self.btn_data_dir.clicked.connect(lambda: self._choose_dir(self.data_dir_edit))
         self.btn_download_dir.clicked.connect(lambda: self._choose_dir(self.download_dir_edit))
         self.btn_save_settings.clicked.connect(self.save_settings)
 

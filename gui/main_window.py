@@ -30,7 +30,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tray = Tray(self)
         self.tray.tray.hide()
-        self.resize(620, 560)
+        self.resize(470, 560)
 
     def append_log(self, text: str) -> None:
         self.bot_tab.append_log(text)

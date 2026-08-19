@@ -13,10 +13,24 @@ class UpdateResult:
     message: str
 
 
+def find_git_repo(start_dir: Path | None = None) -> Path | None:
+    start = (start_dir or app_dir()).resolve()
+
+    for directory in (start, *start.parents):
+        if (directory / ".git").exists():
+            return directory
+
+    return None
+
+
 def git_update(repo_dir: Path | None = None) -> UpdateResult:
-    repo = (repo_dir or app_dir()).resolve()
-    if not (repo / ".git").exists():
-        return UpdateResult(False, "Git repository was not found near the application.")
+    start = (repo_dir or app_dir()).resolve()
+    repo = find_git_repo(start)
+    if repo is None:
+        return UpdateResult(
+            False,
+            f"Git repository was not found near the application. Start path: {start}",
+        )
 
     try:
         fetch = subprocess.run(

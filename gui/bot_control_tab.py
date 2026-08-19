@@ -5,7 +5,7 @@ import re
 
 from PyQt6 import QtCore, QtWidgets
 
-from core.updater import git_update
+from core.updater import update_application
 
 
 class BotControlTab(QtWidgets.QWidget):
@@ -40,7 +40,7 @@ class BotControlTab(QtWidgets.QWidget):
         self.log_view.setReadOnly(True)
         layout.addWidget(self.log_view)
 
-        self.btn_update = QtWidgets.QPushButton("Update from Git")
+        self.btn_update = QtWidgets.QPushButton("Update")
         layout.addWidget(self.btn_update)
 
         self.btn_start.clicked.connect(self.start_clicked.emit)
@@ -64,14 +64,18 @@ class BotControlTab(QtWidgets.QWidget):
         reply = QtWidgets.QMessageBox.question(
             self,
             "Update",
-            "Pull the latest version from the configured Git remote?",
+            "Check for updates and install the latest available version?",
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
         )
         if reply != QtWidgets.QMessageBox.StandardButton.Yes:
             return
 
-        result = git_update()
+        self.btn_update.setEnabled(False)
+        result = update_application()
+        self.btn_update.setEnabled(True)
         if result.ok:
             QtWidgets.QMessageBox.information(self, "Update", result.message)
+            if result.should_exit:
+                QtWidgets.QApplication.quit()
         else:
             QtWidgets.QMessageBox.warning(self, "Update", result.message)

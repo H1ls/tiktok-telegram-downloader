@@ -84,6 +84,7 @@ class AppConfig:
     MAX_FILE_SIZE_BYTES: ClassVar[int] = 50 * 1024 * 1024
     MAX_ALBUM_SIZE_BYTES: ClassVar[int] = 45 * 1024 * 1024
     MAX_ALBUM_ITEMS: ClassVar[int] = 10
+    DOWNLOAD_WORKERS: ClassVar[int] = 4
 
     def validate(self) -> None:
         self.batch_size = max(1, min(100, int(self.batch_size or 10)))

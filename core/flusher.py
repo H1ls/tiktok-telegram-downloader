@@ -32,7 +32,7 @@ class FolderFlusher:
 
         sent_total = 0
         total = len(files)
-        block_size = 10
+        block_size = self.cfg.MAX_ALBUM_ITEMS
         block_count = (total + block_size - 1) // block_size
 
         for block_index in range(block_count):
@@ -50,9 +50,9 @@ class FolderFlusher:
                 paths=chunk,
                 caption=caption if sent_total == 0 else None,
                 strict_album=True,
-                max_file_bytes=50 * 1024 * 1024,
-                max_album_bytes=45 * 1024 * 1024,
-                max_album_items=10,
+                max_file_bytes=self.cfg.MAX_FILE_SIZE_BYTES,
+                max_album_bytes=self.cfg.MAX_ALBUM_SIZE_BYTES,
+                max_album_items=self.cfg.MAX_ALBUM_ITEMS,
             )
 
             sent_total += sent

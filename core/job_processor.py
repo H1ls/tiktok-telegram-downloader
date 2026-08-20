@@ -93,12 +93,12 @@ class JobProcessor:
     async def _warn_if_no_audio(self, job: Job, path: Path) -> None:
         try:
             if not has_audio_stream(path):
-                await self.bot.send_message(
+                await self.send_progress(
                     job.chat_id,
                     "Видео скачалось без звука. Возможна проблема TikTok/авторизации/региона.",
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.log(f"[TELEGRAM] Audio warning failed: {error_summary(exc)}")
 
     async def _send_requested_chat(self, job: Job, path: Path) -> None:
         try:
@@ -116,8 +116,8 @@ class JobProcessor:
             self.log(f"[TELEGRAM] DM send failed: {error_summary(exc)}")
             try:
                 await self.sender.send_paths(chat_id=int(job.chat_id), paths=[path])
-            except Exception:
-                pass
+            except Exception as exc:
+                self.log(f"[TELEGRAM] Missing target chat message failed: {error_summary(exc)}")
         self._delete_file(path)
 
     async def _handle_group_batch(self, job: Job, path: Path, user_cfg: dict) -> None:
@@ -126,27 +126,31 @@ class JobProcessor:
 
         try:
             nfiles = self.pending_count(job.user_id)
-            await self.bot.send_message(job.chat_id, f"Загрузил {nfiles}/{batch_size}\n{job.source_url or job.url}")
+            await self.send_progress(job.chat_id, f"Загрузил {nfiles}/{batch_size}\n{job.source_url or job.url}")
         except Exception as exc:
-            await self.bot.send_message(job.chat_id, f"Не скачано:\n{job.source_url or job.url}\n{exc}")
+            self.log(f"[TELEGRAM] Batch progress message failed: {error_summary(exc)}")
+            try:
+                await self.send_progress(job.chat_id, f"Не скачано:\n{job.source_url or job.url}\n{exc}")
+            except Exception as send_exc:
+                self.log(f"[TELEGRAM] Batch failure message failed: {error_summary(send_exc)}")
 
         if self.pending_count(job.user_id) < batch_size:
             return
 
         if not target_chat_id:
             try:
-                await self.bot.send_message(job.chat_id, "Укажи чат для пачек: /bind или /bind_id -100...")
-            except Exception:
-                pass
+                await self.send_progress(job.chat_id, "Укажи чат для пачек: /bind или /bind_id -100...")
+            except Exception as exc:
+                self.log(f"[TELEGRAM] Missing target chat message failed: {error_summary(exc)}")
             return
 
         try:
-            await self.bot.send_message(
+            await self.send_progress(
                 job.chat_id,
                 f"В процессе отправки\nЧат: {target_chat_id}\nФайлов: {self.pending_count(job.user_id)}/{batch_size}",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.log(f"[TELEGRAM] Flush start message failed: {error_summary(exc)}")
 
         try:
             async with self.lock_for_user(job.user_id):
@@ -159,22 +163,22 @@ class JobProcessor:
         except Exception as exc:
             self.log(f"[TELEGRAM] Auto flush failed: {error_summary(exc)}")
             try:
-                await self.bot.send_message(
+                await self.send_progress(
                     job.chat_id,
                     f"Не смог отправить пачку. Файлы не удалял.\nПричина: {error_summary(exc)}",
                 )
-            except Exception:
-                pass
+            except Exception as send_exc:
+                self.log(f"[TELEGRAM] Auto flush failure message failed: {error_summary(send_exc)}")
             return
 
         try:
             left = self.pending_count(job.user_id)
-            await self.bot.send_message(
+            await self.send_progress(
                 job.chat_id,
                 f"Отправил в чат {target_chat_id}\nФайлов: {sent}\nОсталось в папке: {left}",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.log(f"[TELEGRAM] Flush result message failed: {error_summary(exc)}")
 
     def _delete_file(self, path: Path) -> None:
         try:

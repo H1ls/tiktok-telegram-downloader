@@ -19,6 +19,7 @@ from core.flusher import FolderFlusher
 from core.job_processor import JobProcessor, error_summary
 from core.job_queue import JobQueueService, QueueState
 from core.jobs import Job
+from core.rate_limiter import AsyncRateLimiter
 from core.sender import TelegramSender
 from core.user_settings import UserSettingsService
 
@@ -66,7 +67,9 @@ class TikTokBotService:
         self._stop_event = asyncio.Event()
         self._started = False
         self._user_locks: dict[int, asyncio.Lock] = {}
+        self._user_processing_locks: dict[int, asyncio.Lock] = {}
         self._download_pool = asyncio.Semaphore(4)
+        self._message_limiter = AsyncRateLimiter(max_calls=20, window_seconds=60.0)
 
         self.sender: TelegramSender | None = None
         self.flusher: FolderFlusher | None = None
@@ -80,6 +83,10 @@ class TikTokBotService:
     def user_lock(self, user_id: int) -> asyncio.Lock:
         self._user_locks.setdefault(user_id, asyncio.Lock())
         return self._user_locks[user_id]
+
+    def processing_lock(self, user_id: int) -> asyncio.Lock:
+        self._user_processing_locks.setdefault(user_id, asyncio.Lock())
+        return self._user_processing_locks[user_id]
 
     def enqueue(self, job: Job) -> int:
         return self.job_queue.enqueue(job)
@@ -100,9 +107,14 @@ class TikTokBotService:
         if not self._bot:
             return
         try:
+            await self._message_limiter.acquire()
             await self._bot.send_message(chat_id, text)
-        except Exception:
-            pass
+        except TelegramUnauthorizedError:
+            self.log("[SERVICE] Progress message failed: invalid bot token")
+        except TelegramNetworkError as exc:
+            self.log(f"[SERVICE] Progress message network error: {error_summary(exc)}")
+        except Exception as exc:
+            self.log(f"[SERVICE] Progress message failed: {error_summary(exc)}")
 
     async def start(self) -> None:
         if self._started:
@@ -121,13 +133,18 @@ class TikTokBotService:
             self._register_handlers(self._dp, self)
 
         self._stop_event.clear()
+        worker_count = max(1, min(self.cfg.DOWNLOAD_WORKERS, self.cfg.MAX_ALBUM_ITEMS))
+        worker_tasks = [
+            asyncio.create_task(self._worker_loop(worker_id), name=f"worker-{worker_id}")
+            for worker_id in range(1, worker_count + 1)
+        ]
         self._tasks = [
-            asyncio.create_task(self._worker_loop(), name="worker"),
+            *worker_tasks,
             asyncio.create_task(self._polling_loop(), name="polling"),
             asyncio.create_task(self._startup_flush_loop(), name="startup_flush"),
         ]
         self._started = True
-        self.log("[SERVICE] Started")
+        self.log(f"[SERVICE] Started with {worker_count} worker(s)")
 
     async def stop(self) -> None:
         if not self._started:
@@ -155,6 +172,7 @@ class TikTokBotService:
         self.flush_service = None
         self._started = False
         self._user_locks.clear()
+        self._user_processing_locks.clear()
         self.log("[SERVICE] Stopped")
 
     async def flush_user(self, user_id: int, target_chat_id: int, notify_chat_id: int | None = None) -> None:
@@ -237,26 +255,28 @@ class TikTokBotService:
                 self.log(f"[POLLING] Stopped: {error_summary(exc)}")
                 return
 
-    async def _worker_loop(self) -> None:
-        self.log("[WORKER] Start")
+    async def _worker_loop(self, worker_id: int) -> None:
+        self.log(f"[WORKER:{worker_id}] Start")
         while not self._stop_event.is_set():
             try:
                 job = await self.job_queue.get()
             except asyncio.CancelledError:
-                self.log("[WORKER] Cancelled")
+                self.log(f"[WORKER:{worker_id}] Cancelled")
                 raise
 
             self.job_queue.mark_started(job)
             try:
                 if not self.processor:
                     raise RuntimeError("Job processor is not initialized")
-                await self.processor.process(job)
+                self.log(f"[WORKER:{worker_id}] Processing user={job.user_id}, url={job.source_url or job.url}")
+                async with self.processing_lock(job.user_id):
+                    await self.processor.process(job)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.log(f"[WORKER] Error: {error_summary(exc)}")
+                self.log(f"[WORKER:{worker_id}] Error: {error_summary(exc)}")
             finally:
                 self.job_queue.mark_finished(job)
                 self.job_queue.task_done()
 
-        self.log("[WORKER] End")
+        self.log(f"[WORKER:{worker_id}] End")

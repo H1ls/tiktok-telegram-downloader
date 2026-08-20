@@ -5,7 +5,18 @@ import re
 
 from PyQt6 import QtCore, QtWidgets
 
+from core.updater import UpdateResult
 from core.updater import update_application
+from core.version import CURRENT_VERSION
+
+
+class UpdateThread(QtCore.QThread):
+    progress_signal = QtCore.pyqtSignal(str)
+    finished_signal = QtCore.pyqtSignal(object)
+
+    def run(self) -> None:
+        result = update_application(progress=self.progress_signal.emit)
+        self.finished_signal.emit(result)
 
 
 class BotControlTab(QtWidgets.QWidget):
@@ -14,6 +25,7 @@ class BotControlTab(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
+        self._update_thread: UpdateThread | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -29,6 +41,7 @@ class BotControlTab(QtWidgets.QWidget):
         top.addWidget(self.btn_start)
         top.addWidget(self.btn_stop)
         top.addStretch(1)
+        top.addWidget(QtWidgets.QLabel(f"Version: {CURRENT_VERSION}"))
         top.addWidget(self.status_lbl)
         layout.addLayout(top)
 
@@ -71,11 +84,21 @@ class BotControlTab(QtWidgets.QWidget):
             return
 
         self.btn_update.setEnabled(False)
-        result = update_application()
+        self.append_log("[UPDATE] Started")
+        self._update_thread = UpdateThread()
+        self._update_thread.progress_signal.connect(self.append_log)
+        self._update_thread.finished_signal.connect(self._update_finished)
+        self._update_thread.finished.connect(self._update_thread.deleteLater)
+        self._update_thread.start()
+
+    def _update_finished(self, result: UpdateResult) -> None:
         self.btn_update.setEnabled(True)
+        self._update_thread = None
         if result.ok:
+            self.append_log(f"[UPDATE] {result.message}")
             QtWidgets.QMessageBox.information(self, "Update", result.message)
             if result.should_exit:
                 QtWidgets.QApplication.quit()
         else:
+            self.append_log(f"[UPDATE] Failed: {result.message}")
             QtWidgets.QMessageBox.warning(self, "Update", result.message)

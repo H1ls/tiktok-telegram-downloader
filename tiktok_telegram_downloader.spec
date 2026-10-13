@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from PyInstaller.utils.hooks import collect_all
+from pathlib import Path
 
-datas = []
+datas = [("ui/styles", "ui/styles"), ("ui/icons", "ui/icons")]
 binaries = []
 hiddenimports = []
 
@@ -35,6 +36,7 @@ exe = EXE(
     a.datas,
     [],
     name="tiktok-telegram-downloader",
+    icon=str(Path(SPECPATH) / "ui" / "icons" / "app.ico"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

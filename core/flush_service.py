@@ -8,7 +8,7 @@ from core.job_processor import error_summary
 from core.user_settings import UserSettingsService
 
 LogFn = Callable[[str], None]
-AsyncProgressFn = Callable[[int, str], Awaitable[None]]
+AsyncProgressFn = Callable[..., Awaitable[None]]
 
 
 class FlushService:

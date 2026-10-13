@@ -10,6 +10,7 @@ from core.config import load_config
 from core.service import TikTokBotService
 from bot.handlers import register_handlers
 from gui.main_window import MainWindow
+from ui.theme import apply_theme
 
 
 class ServiceThread(QtCore.QThread):
@@ -98,6 +99,7 @@ def main() -> None:
     cfg = load_config()
 
     app = QtWidgets.QApplication(sys.argv)
+    apply_theme(app)
     app.setQuitOnLastWindowClosed(False)
 
     window = MainWindow()

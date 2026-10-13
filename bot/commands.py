@@ -4,6 +4,7 @@ from aiogram import Dispatcher, types
 from aiogram.filters import Command
 
 from bot.messages import format_mode, settings_text, start_text
+from core.command_aliases import aliases_for
 from core.config import save_config
 
 
@@ -11,16 +12,19 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
     def ucfg(user_id: int) -> dict:
         return svc._user_cfg(user_id)
 
-    @dp.message(Command("start"))
+    def aliases(command_key: str) -> list[str]:
+        return aliases_for(svc.cfg.command_aliases, command_key)
+
+    @dp.message(Command(*aliases("start")))
     async def start(message: types.Message) -> None:
         await message.answer(start_text())
 
-    @dp.message(Command("my"))
+    @dp.message(Command(*aliases("my")))
     async def cmd_my(message: types.Message) -> None:
         user_id = int(message.from_user.id)
         await message.answer(settings_text(user_id, ucfg(user_id), svc.pending_count(user_id)))
 
-    @dp.message(Command("bind"))
+    @dp.message(Command(*aliases("bind")))
     async def cmd_bind(message: types.Message) -> None:
         if message.chat.type not in ("group", "supergroup"):
             await message.answer("Команда /bind работает в группе. В ЛС используй: /bind_id -100...")
@@ -32,7 +36,7 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
         save_config(svc.cfg)
         await message.answer("Группа привязана. Ссылки будут копиться и уходить пачкой сюда.")
 
-    @dp.message(Command("bind_id"))
+    @dp.message(Command(*aliases("bind_id")))
     async def cmd_bind_id(message: types.Message) -> None:
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) != 2:
@@ -51,7 +55,7 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
         save_config(svc.cfg)
         await message.answer(f"Привязал target_chat_id = {group_id}\nРежим: group_batch.")
 
-    @dp.message(Command("route"))
+    @dp.message(Command(*aliases("route")))
     async def cmd_route(message: types.Message) -> None:
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) != 2:
@@ -68,7 +72,7 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
         save_config(svc.cfg)
         await message.answer(f"mode = {format_mode(user_cfg['delivery_mode'])}")
 
-    @dp.message(Command("batch"))
+    @dp.message(Command(*aliases("batch")))
     async def cmd_batch(message: types.Message) -> None:
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) != 2 or not parts[1].isdigit():
@@ -81,7 +85,7 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
         save_config(svc.cfg)
         await message.answer(f"batch_size = {value}")
 
-    @dp.message(Command("keep"))
+    @dp.message(Command(*aliases("keep")))
     async def cmd_keep(message: types.Message) -> None:
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) != 2 or not parts[1].isdigit():
@@ -94,7 +98,7 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
         save_config(svc.cfg)
         await message.answer(f"queue_keep_max = {value}")
 
-    @dp.message(Command("quality"))
+    @dp.message(Command(*aliases("quality")))
     async def cmd_quality(message: types.Message) -> None:
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) != 2 or not parts[1].isdigit():
@@ -111,14 +115,14 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
         save_config(svc.cfg)
         await message.answer(f"max_height = {quality}p")
 
-    @dp.message(Command("status"))
+    @dp.message(Command(*aliases("status")))
     async def cmd_status(message: types.Message) -> None:
         user_id = int(message.from_user.id)
         user_cfg = ucfg(user_id)
         batch_size = min(10, int(user_cfg.get("batch_size") or 1))
         await message.answer(f"В очереди: {svc.pending_count(user_id)} файлов. Порог пачки: {batch_size}.")
 
-    @dp.message(Command("flush"))
+    @dp.message(Command(*aliases("flush")))
     async def cmd_flush(message: types.Message) -> None:
         user_id = int(message.from_user.id)
         user_cfg = ucfg(user_id)
@@ -134,7 +138,7 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
 
         await svc.flush_user(user_id, target_chat_id=target_chat_id, notify_chat_id=int(message.chat.id))
 
-    @dp.message(Command("last"))
+    @dp.message(Command(*aliases("last")))
     async def cmd_last(message: types.Message) -> None:
         if message.chat.type not in ("group", "supergroup"):
             await message.answer("/last работает в группе.")
@@ -149,6 +153,6 @@ def register_command_handlers(dp: Dispatcher, svc) -> None:
 
         await svc.flush_user(user_id, target_chat_id=int(message.chat.id), notify_chat_id=int(message.chat.id))
 
-    @dp.message(Command("id"))
+    @dp.message(Command(*aliases("id")))
     async def my_id(message: types.Message) -> None:
         await message.answer(f"user_id={message.from_user.id}")

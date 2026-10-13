@@ -103,12 +103,17 @@ class TikTokBotService:
     def _food_caption(self) -> str:
         return f"{random.choice(FOOD_EMOJIS)} Еда готова"
 
-    async def _send_progress(self, chat_id: int, text: str) -> None:
+    async def _send_progress(self, chat_id: int, text: str, reply_to_message_id: int | None = None) -> None:
         if not self._bot:
             return
         try:
             await self._message_limiter.acquire()
-            await self._bot.send_message(chat_id, text)
+            await self._bot.send_message(
+                chat_id,
+                text,
+                reply_to_message_id=reply_to_message_id,
+                allow_sending_without_reply=True,
+            )
         except TelegramUnauthorizedError:
             self.log("[SERVICE] Progress message failed: invalid bot token")
         except TelegramNetworkError as exc:

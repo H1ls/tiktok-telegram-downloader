@@ -1,5 +1,5 @@
 # gui/tray.py
-from PyQt6 import QtWidgets, QtGui, QtCore
+from PyQt6 import QtWidgets
 
 
 class Tray:
@@ -7,8 +7,9 @@ class Tray:
         self.window = window
         self._really_quit = False
 
-        # гарантированная системная иконка (без файлов)
-        icon = window.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon)
+        icon = window.windowIcon()
+        if icon.isNull():
+            icon = window.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon)
 
         self.tray = QtWidgets.QSystemTrayIcon(icon, window)
 

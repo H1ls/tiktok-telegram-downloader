@@ -14,7 +14,7 @@ from core.sender import TelegramSender
 from core.user_settings import UserSettingsService
 
 LogFn = Callable[[str], None]
-AsyncProgressFn = Callable[[int, str], Awaitable[None]]
+AsyncProgressFn = Callable[..., Awaitable[None]]
 
 
 def error_summary(exc: BaseException, max_length: int = 240) -> str:
@@ -52,6 +52,9 @@ class JobProcessor:
         self.food_caption = food_caption
         self.send_progress = send_progress
         self.log = log
+
+    async def _send_job_progress(self, job: Job, text: str) -> None:
+        await self.send_progress(job.chat_id, text, job.msg_id)
 
     async def process(self, job: Job) -> None:
         path = await self._download(job)
@@ -93,8 +96,8 @@ class JobProcessor:
     async def _warn_if_no_audio(self, job: Job, path: Path) -> None:
         try:
             if not has_audio_stream(path):
-                await self.send_progress(
-                    job.chat_id,
+                await self._send_job_progress(
+                    job,
                     "Видео скачалось без звука. Возможна проблема TikTok/авторизации/региона.",
                 )
         except Exception as exc:
@@ -126,11 +129,11 @@ class JobProcessor:
 
         try:
             nfiles = self.pending_count(job.user_id)
-            await self.send_progress(job.chat_id, f"Загрузил {nfiles}/{batch_size}\n{job.source_url or job.url}")
+            await self._send_job_progress(job, f"Загрузил {nfiles}/{batch_size}\n{job.source_url or job.url}")
         except Exception as exc:
             self.log(f"[TELEGRAM] Batch progress message failed: {error_summary(exc)}")
             try:
-                await self.send_progress(job.chat_id, f"Не скачано:\n{job.source_url or job.url}\n{exc}")
+                await self._send_job_progress(job, f"Не скачано:\n{job.source_url or job.url}\n{exc}")
             except Exception as send_exc:
                 self.log(f"[TELEGRAM] Batch failure message failed: {error_summary(send_exc)}")
 
@@ -139,14 +142,14 @@ class JobProcessor:
 
         if not target_chat_id:
             try:
-                await self.send_progress(job.chat_id, "Укажи чат для пачек: /bind или /bind_id -100...")
+                await self._send_job_progress(job, "Укажи чат для пачек: /bind или /bind_id -100...")
             except Exception as exc:
                 self.log(f"[TELEGRAM] Missing target chat message failed: {error_summary(exc)}")
             return
 
         try:
-            await self.send_progress(
-                job.chat_id,
+            await self._send_job_progress(
+                job,
                 f"В процессе отправки\nЧат: {target_chat_id}\nФайлов: {self.pending_count(job.user_id)}/{batch_size}",
             )
         except Exception as exc:
@@ -158,13 +161,13 @@ class JobProcessor:
                     user_id=job.user_id,
                     chat_id=int(target_chat_id),
                     caption=self.food_caption(),
-                    progress=lambda text: self.send_progress(job.chat_id, text),
+                    progress=lambda text: self._send_job_progress(job, text),
                 )
         except Exception as exc:
             self.log(f"[TELEGRAM] Auto flush failed: {error_summary(exc)}")
             try:
-                await self.send_progress(
-                    job.chat_id,
+                await self._send_job_progress(
+                    job,
                     f"Не смог отправить пачку. Файлы не удалял.\nПричина: {error_summary(exc)}",
                 )
             except Exception as send_exc:
@@ -173,8 +176,8 @@ class JobProcessor:
 
         try:
             left = self.pending_count(job.user_id)
-            await self.send_progress(
-                job.chat_id,
+            await self._send_job_progress(
+                job,
                 f"Отправил в чат {target_chat_id}\nФайлов: {sent}\nОсталось в папке: {left}",
             )
         except Exception as exc:

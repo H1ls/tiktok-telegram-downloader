@@ -123,7 +123,14 @@ def release_update(current_exe: Path | None = None, progress: ProgressFn | None 
         _emit_progress(progress, "[UPDATE] Preparing installer script...")
         updater_script = _write_windows_updater(exe_path, downloaded_exe)
         subprocess.Popen(
-            ["cmd", "/c", str(updater_script)],
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(updater_script),
+            ],
             cwd=str(exe_path.parent),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
@@ -266,25 +273,33 @@ def _sha256_file(path: Path) -> str:
 
 
 def _write_windows_updater(current_exe: Path, downloaded_exe: Path) -> Path:
-    script = downloaded_exe.with_suffix(".bat")
+    script = downloaded_exe.with_suffix(".ps1")
     script.write_text(
         "\n".join(
             [
-                "@echo off",
-                "setlocal",
-                "set attempts=0",
-                ":retry",
-                "set /a attempts+=1",
-                f'move /Y "{downloaded_exe}" "{current_exe}" >nul 2>nul',
-                "if errorlevel 1 (",
-                "  if %attempts% geq 30 exit /b 1",
-                "  timeout /t 1 /nobreak >nul",
-                "  goto retry",
-                ")",
-                f'start "" "{current_exe}"',
-                f'del "%~f0"',
+                "$ErrorActionPreference = 'Stop'",
+                f"$downloadedExe = '{_escape_powershell_literal(downloaded_exe)}'",
+                f"$currentExe = '{_escape_powershell_literal(current_exe)}'",
+                "$attempts = 0",
+                "while ($true) {",
+                "    $attempts += 1",
+                "    try {",
+                "        Move-Item -LiteralPath $downloadedExe -Destination $currentExe -Force",
+                "        break",
+                "    } catch {",
+                "        if ($attempts -ge 30) { throw }",
+                "        Start-Sleep -Seconds 1",
+                "    }",
+                "}",
+                "Start-Process -FilePath $currentExe",
+                "Start-Sleep -Milliseconds 300",
+                "Remove-Item -LiteralPath $PSCommandPath -Force",
             ]
         ),
-        encoding="utf-8",
+        encoding="utf-8-sig",
     )
     return script
+
+
+def _escape_powershell_literal(path: Path) -> str:
+    return str(path).replace("'", "''")

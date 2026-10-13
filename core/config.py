@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from core.app_paths import app_dir
+from core.command_aliases import DEFAULT_COMMAND_ALIASES, normalize_command_aliases
 
 
 APP_NAME = "TikTokDownloader"
@@ -78,6 +79,9 @@ class AppConfig:
         "queue_keep_max": 50,
         "max_height": None,
     })
+    command_aliases: dict[str, list[str]] = field(default_factory=lambda: {
+        key: list(value) for key, value in DEFAULT_COMMAND_ALIASES.items()
+    })
     admin_ids: list[int] = field(default_factory=list)
     users: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -99,6 +103,7 @@ class AppConfig:
         defaults["batch_size"] = max(1, min(10, int(defaults.get("batch_size") or 5)))
         defaults["queue_keep_max"] = max(1, int(defaults.get("queue_keep_max") or 50))
         self.defaults = defaults
+        self.command_aliases = normalize_command_aliases(self.command_aliases)
 
 
 def _load_raw_config(path: Path) -> dict[str, Any]:
@@ -137,6 +142,7 @@ def load_config() -> AppConfig:
         download_root=env_download_root or (data.get("download_root") or None),
         autostart=bool(data.get("autostart", False)),
         defaults=defaults,
+        command_aliases=normalize_command_aliases(data.get("command_aliases", {})),
         admin_ids=[int(x) for x in (data.get("admin_ids", []) or [])],
         users=users,
     )

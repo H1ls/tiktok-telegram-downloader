@@ -5,9 +5,10 @@ import unittest
 from pathlib import Path
 
 from core.config import AppConfig
+from core.command_aliases import CommandValidationError, normalize_command_aliases
 from core.paths import get_user_dir
 from core.rate_limiter import AsyncRateLimiter
-from core.updater import _parse_sha256, _sha256_file, find_git_repo
+from core.updater import _parse_sha256, _sha256_file, _write_windows_updater, find_git_repo
 
 
 class ConfigValidationTests(unittest.TestCase):
@@ -23,6 +24,15 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertEqual(cfg.defaults["batch_size"], 10)
         self.assertEqual(cfg.defaults["queue_keep_max"], 50)
         self.assertEqual(cfg.defaults["delivery_mode"], "dm")
+
+    def test_command_aliases_are_normalized(self) -> None:
+        aliases = normalize_command_aliases({"start": "start, начало, запуск"})
+
+        self.assertEqual(aliases["start"], ["start", "начало", "запуск"])
+
+    def test_command_aliases_reject_duplicates_between_handlers(self) -> None:
+        with self.assertRaises(CommandValidationError):
+            normalize_command_aliases({"start": "start, go", "my": "my, go"})
 
 
 class PathValidationTests(unittest.TestCase):
@@ -67,6 +77,16 @@ class UpdaterTests(unittest.TestCase):
                 _sha256_file(path),
                 "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
             )
+
+    def test_windows_updater_uses_powershell_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            script = _write_windows_updater(root / "app.exe", root / "app.download")
+            content = script.read_text(encoding="utf-8-sig")
+
+            self.assertEqual(script.suffix, ".ps1")
+            self.assertIn("Move-Item -LiteralPath", content)
+            self.assertIn("Start-Process -FilePath", content)
 
 
 class RateLimiterTests(unittest.IsolatedAsyncioTestCase):

@@ -16,3 +16,4 @@ Updates/
 
 *.log
 *.tmp
+/tasks/
